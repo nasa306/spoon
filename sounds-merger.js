@@ -52,7 +52,29 @@
       throw e;
     }
   }
-
+  function b64ToBytes(src, expected) {
+    var lut = new Int16Array(256).fill(-1);
+    var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    for (var i = 0; i < 64; i++) lut[chars.charCodeAt(i)] = i;
+    var out = new Uint8Array(expected);
+    var o = 0, acc = 0, bits = 0;
+    for (var j = 0; j < src.length; j++) {
+      var c = src[j];
+      if (c === 61) { acc = 0; bits = 0; continue; } // '=' ends a line's group
+      var v = lut[c];
+      if (v < 0) continue;                           // skip newlines/whitespace
+      acc = (acc << 6) | v;
+      bits += 6;
+      if (bits >= 8) {
+        bits -= 8;
+        if (o < expected) out[o] = (acc >> bits) & 255;
+        o++;
+        acc &= (1 << bits) - 1;
+      }
+    }
+    if (o !== expected) throw new Error("decoded size " + o + " != " + expected);
+    return out.buffer;
+  }
   async function run() {
     if (started) throw new Error("sounds merge already started");
     started = true;
@@ -75,9 +97,9 @@
       throw new Error("merged SHA-256 mismatch");
 
     status("Sound data verified.");
-    return out.buffer;
+    return b64ToBytes(out, 25921893);
   }
-
+  
   window.__eagSoundsMerged = run();
   window.__eagSoundsMerged.catch(function (e) {
     console.error("[sounds-merger] FAILED: " + e.message);
